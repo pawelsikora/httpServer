@@ -16,6 +16,7 @@
 	#include <time.h>
 	#include <sys/file.h>
 	#include <signal.h>
+	#include <getopt.h>
 	#define MAX_REQ_LINE 1024
 	
 	int check;
@@ -38,7 +39,15 @@
 	char	buf[100] = {0};
 	enum 	reqMethod { GET, NOTIMPLEMENTED };
 	int 	lockfd;
-
+	
+	const struct option long_options[] = {
+	{ "help"	, 0, NULL, 'h' },
+	{ "rootdir"	, 1, NULL, 'r' },
+	{ "port"	, 1, NULL, 'p' },
+	{ "daemon"	, 1, NULL, 'd' },
+	{ "chroot"	, 1, NULL, 'c' },
+	{  NULL		, 0, NULL,  0  }
+	};
 
 	struct  reqInfo 
 	{
@@ -75,6 +84,7 @@
 						 const struct addrinfo *hints,
 						 struct addrinfo **res);
 	int 		checkPath		(char *checkingPath);
+	int 		print_info(char * programName);
 	
 	void 		my_handler(int signum)
 	{
@@ -112,9 +122,14 @@
 
 		configFile();
 		
-			while ((c = getopt(argc,argv, "p:r:c:l:d:")) != -1)
+			while ((c = getopt_long(argc,argv, "hp:r:c:l:d:", long_options, NULL)) != -1)
 				switch(c)
 				{
+					case 'h':
+						system("clear");
+						print_info(argv[0]);
+						exit(0);
+						break;
 					case 'r':
 						strcpy(ROOT, optarg);
 						break;
@@ -126,7 +141,7 @@
 						break;
 					case 'l':
 						if((LOGFILE = malloc(strlen(optarg))) == NULL)
-							die("Error alocating memory: LOGFILE", LOG_USER);;
+							die("Error alocating memory: LOGFILE", LOG_USER);
 						strcpy(LOGFILE, optarg);
 						break;
 					case 'd':
@@ -244,7 +259,7 @@
 			iport = 9000; 
 		}
 
-		if(ret = getaddrinfo(NULL, port, &hints, &serverInfo) != 0){
+		if((ret = (getaddrinfo(NULL, port, &hints, &serverInfo)) != 0)){
 			fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(ret));
 			exit(1);
 		}
@@ -317,6 +332,7 @@
 			
 		
 		}
+		return 0;
 	}
 
 	void configFile(){
@@ -495,7 +511,7 @@
 		strcat(pathToLockFile, LOCKFILE);
 		LOCKFILE = strdup(pathToLockFile);
 		
-		if( lockfd = open(LOCKFILE, O_RDWR|O_CREAT|O_EXCL) < 0 )
+		if( (lockfd = open(LOCKFILE, O_RDWR|O_CREAT|O_EXCL) < 0) )
 		{
 			perror("Error open lockfile! ");
 		}
@@ -517,17 +533,18 @@
 	{
 		char 	buffer[100];
 
-
-
 		sprintf(buffer, "<HTML>\n<HEAD>\n<TITLE>Server Error %d</TITLE>\n"
-			    "</HEAD>\n\n", reqinfo->status);
+	       		        "</HEAD>\n\n", reqinfo->status);
+		
 		WriteLine(n, buffer, strlen(buffer));
 
 		sprintf(buffer, "<BODY>\n<H1>Server Error %d</H1>\n", reqinfo->status);
+		
 		WriteLine(n, buffer, strlen(buffer));
 
 		sprintf(buffer, "<P>The request could not be completed.</P>\n"
-			    "</BODY>\n</HTML>\n");
+			        "</BODY>\n</HTML>\n");
+		
 		WriteLine(n, buffer, strlen(buffer));
 
 	    return 0;
@@ -553,7 +570,7 @@
 		{
 			die("Error select()", LOG_USER);
 		}
-		else if ( rval = 0 )
+		else if ( (rval = 0) )
 		{
 			return -1;
 		}
@@ -626,7 +643,8 @@
 			first_header = 0;
 			return 0;
 		}
-
+		
+		return 0;
 	}
 
 	int returnResource( int n, int getRes, struct reqInfo * reqinfo )
@@ -740,4 +758,21 @@
 		}
 			
 	}
-	
+
+	int print_info(char * programName)
+	{
+		printf(
+			"--------------------------------------------Simple Http Server------------------------------------------------\n\n"\
+			"\n\nThis is a simple http server, which supports only GET command. Every others commands\n"\
+			"will be consider as UNSUPPORTED and will produce 501 error, which was objective as\n"\
+			"a foundation of this program. Features:\n\n"\
+			"- Running as a daemon\n- You can set chroot\n- Logs about connection are putting to logfile\n- Default settings loads from 'httpconf' file\n\n"\
+
+			"\nType name of program: \"%s\" to command line with these possible parameters:\n\n"\
+			"--rootdir	or	-r	Directory, which will be using as a server directory.\n"\
+			"--port		or	-p	Port on which server will be working.\n"\
+			"--daemon	or	-d	If you want to have your program working as a daemon, give 1 after this parameter.\n"\
+			"				Otherwise 0. ex. ( -d 0 to run your program from terminal)\n"\
+			"--chroot	or	-c	1 if you want chroot, otherwise 0.\n"\
+			"--logfile	or	-l	After this parameter you should write name of the logfile you will create.\n\n", programName);
+	}
