@@ -17,16 +17,40 @@
 	#include <sys/file.h>
 	#include <signal.h>
 	#include <getopt.h>
-	#define MAX_REQ_LINE 1024
 	
-	int check;
-	//getconf
-	char	conf[5];
-	int	iport;
-	char 	*LOGFILE = "http.log";
-	char 	*LOCKFILE = "daemon.lock";
-	char	ROOT[500];
-	char	PORT[7] = "8080";
+	#define MAX_REQ_LINE 1024
+	#define DEFAULT_PORT 8080
+	#define DEFAULT_PORT_STR "8080"
+	#define DEFAULT_PATH "/home/psikora/"
+	#define LOGFILE_NAME "http.log"
+	#define LOCKFILE_NAME "daemon.lock"
+	#define MAX_SIZE_OF_PORT 7 
+	#define MAX_SIZE_OF_PATH 500
+	#define MAX_SIZE_OF_FILE_NAME 40
+	#define SIZE_OF_ARRAY_ONE_EL 2
+	
+	
+	struct server_config 
+	{
+		char root[MAX_SIZE_OF_PATH];
+		char logfile[MAX_SIZE_OF_FILE_NAME];
+		char lockfile[MAX_SIZE_OF_FILE_NAME];
+
+		union port_conf
+		{
+			int  	 val;
+			char 	 name[MAX_SIZE_OF_PORT];
+		} port;
+
+		union daemon_var {
+			char	 str[SIZE_OF_ARRAY_ONE_EL];
+			int	 val;
+		} setDaemon;
+
+	} configuration;
+
+	int bCheckPath;
+
 	char	lmessage[300] = {0};
 	int 	setDaemon = 0;
 	int 	setChroot = 0;
@@ -65,7 +89,7 @@
 	int		initializeServer	(char *port);
 	int 		Request			(int n);
 	int 		getRequest		(int n, struct reqInfo * reqinfo);
-	void	 	configFile		(void);
+	int	 	configFile		(void);
 	void 		Log			(char* message);
 	int    		trim      		(char * buffer);
 	ssize_t 	ReadLine  		(int sockd, char *vptr, size_t maxlen);
@@ -83,10 +107,11 @@
 						 const char *service,
 						 const struct addrinfo *hints,
 						 struct addrinfo **res);
-	int 		checkPath		(char *checkingPath);
-	int 		print_info(char * programName);
 	
-	void 		my_handler(int signum)
+	int 		checkPath		(char *checkingPath);
+	int 		print_info		(char * programName);
+	
+	void 		my_handler		(int signum)
 	{
 		if( (flock(lockfd, LOCK_UN)) < 0 )
 		{
@@ -97,7 +122,7 @@
 			die("LOCKFILE unlocked successfully\n", LOG_USER);
 		}
 		
-		if (remove(LOCKFILE) < 0 )
+		if (remove(configuration.lockfile) < 0 )
 		{
 			die("Error removing LOCKFILE\n", LOG_USER);
 		}
@@ -106,7 +131,7 @@
 			die("LOCKFILE removed!\n", LOG_USER);
 		}
 		
-		free(LOGFILE);
+		
 		closelog();
 		
 		exit(1);
@@ -120,6 +145,7 @@
 		int	connected;
 		pid_t 	pid;	
 
+		initialize_configuration();
 		configFile();
 		
 			while ((c = getopt_long(argc,argv, "hp:r:c:l:d:", long_options, NULL)) != -1)
@@ -131,21 +157,21 @@
 						exit(0);
 						break;
 					case 'r':
-						strcpy(ROOT, optarg);
+						strcpy(configuration.root, optarg);
 						break;
 					case 'p':
-						strcpy(PORT, optarg);
+						strcpy(configuration.port.name, optarg);
 						break;
 					case 'c':
 						setChroot = atoi(optarg);
 						break;
 					case 'l':
-						if((LOGFILE = malloc(strlen(optarg))) == NULL)
+						if(((strcpy(configuration.logfile, optarg)) == NULL))
 							die("Error alocating memory: LOGFILE", LOG_USER);
-						strcpy(LOGFILE, optarg);
+						strcpy(configuration.logfile, optarg);
 						break;
 					case 'd':
-						setDaemon = atoi(optarg);
+						configuration.setDaemon.val = atoi(optarg);
 						break;
 					case '?':
 						fprintf(stderr, "Wrong arguments!\n");
@@ -154,23 +180,21 @@
 						exit(EXIT_FAILURE);
 				}
 		
-		iport = atoi(PORT);
 		
 		if(setChroot)	
 		{
 			setChroot = SetChroot();
 		}
 
+
+		initializeServer(configuration.port.name);
 		
 		
-		initializeServer(PORT);
-		
-		
-		if ((check = checkPath(ROOT)) == -1)
+		if ((bCheckPath = checkPath(configuration.root)) == -1)
 		{
-			printf("\nPath was incorrect! Now path looks like this : |%s|\n", ROOT);
+			printf("\nPath was incorrect! Now path looks like this : |%s|\n", configuration.root);
 		}
-		else if (check == 0)
+		else if (bCheckPath == 0)
 		{
 			printf("\nPath is correct!\n");
 		}
@@ -178,11 +202,11 @@
 		
 		printf("Server is starting at port no. |%s|, with root directory as |%s|"
 			"\nLogfile has been created: %s and chroot has%sbeen set\n"
-			, PORT, ROOT, LOGFILE, setChroot?" ":"n't ");
+			, configuration.port.name, configuration.root, configuration.logfile, setChroot?" ":"n't ");
 		
-		if(setDaemon)
+		if(configuration.setDaemon.val)
 		{	
-			isOneInstanceOfDaemon(LOCKFILE);
+			isOneInstanceOfDaemon(configuration.lockfile);
 			createDaemon();
 		}
 
@@ -191,7 +215,7 @@
 			if( (connected = accept(listenfd, NULL, NULL)) < 0)
 				perror("Error accept()");
 			
-			sprintf(lmessage, "Client connected at port %d. ", iport);		
+			sprintf(lmessage, "Client connected at port %d. ", configuration.port.val);		
 			Log(lmessage);
 			
 			
@@ -226,8 +250,21 @@
 		}
 
 
-		free(LOGFILE);
-		return EXIT_FAILURE;
+		free(configuration.logfile);
+
+		return 0;
+	}
+
+
+	int initialize_configuration( void )
+	{
+		 
+		configuration.port.val = DEFAULT_PORT;
+		strcpy(configuration.port.name, DEFAULT_PORT_STR);
+		strcpy(configuration.root, DEFAULT_PATH);
+		strcpy(configuration.logfile,LOGFILE_NAME);
+		strcpy(configuration.lockfile,LOCKFILE_NAME);
+
 	}
 
 	int initializeServer(char *port)
@@ -240,23 +277,24 @@
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 
-		if( (iport < 1024) && getuid() != 0)
+		if( (atoi(port) < 1024) && getuid() != 0)
 		{
 			printf("\nThese numbers of ports <1 - 1024> you can use only as root!\n"
 				"Default number of port has been set: 9000\n");
 			
 			port = "9000";
-			strcpy(PORT, port);
-			iport = 9000; 
+			strcpy(configuration.port.name, port);
+			configuration.port.val = 9000; 
 		}
-		else if (iport > 65535)
+		else if (atoi(port) > 65535)
 		{
+			printf("debug port.val = %d\n\n", &configuration.port.val);
 			printf("You can't use ports bigger than 65535\n"
 				"Default number of port has been set: 9000\n");	
 			
 			port = "9000";
-			strcpy(PORT, port);
-			iport = 9000; 
+			strcpy(configuration.port.name, port);
+			configuration.port.val = 9000; 
 		}
 
 		if((ret = (getaddrinfo(NULL, port, &hints, &serverInfo)) != 0)){
@@ -313,6 +351,7 @@
 	
 	int checkPath(char *checkingPath)
 	{
+		
 		while(checkingPath)
 		{	
 			if(*checkingPath++ == '\0')
@@ -333,39 +372,71 @@
 		
 		}
 		return 0;
+	
 	}
 
-	void configFile(){
+	int configFile(){
 		
-		FILE 	*confFile;
-		int 	i;
-		
-		confFile = fopen("http.conf", "r");
+		const	 char	 s[SIZE_OF_ARRAY_ONE_EL] = "=";
+   		const	 char	 e[SIZE_OF_ARRAY_ONE_EL] = "\n";
+   		auto 	 char*	 token;
+   		auto 	 int 	 number	 = 0;
+   		auto 	 int 	 start   = 1;
+		auto	 FILE*	 fp;
+		auto   	 char*	 string_from_file;
+		auto	 int 	 len  = 0;
+		auto	 char	 tmp[500];
+		auto	 int 	 i    = 0;
+	
+	
+		fp = fopen("http.conf", "r");
+	
+		while((tmp[len] = fgetc(fp)) != EOF)
+			len++;
+	
+		string_from_file = (char*)calloc(len+3, sizeof(tmp[0]));
+		string_from_file[38] = 'e';
+		memcpy(string_from_file, tmp, len);
+		//printf("\n\t\tTo 36,37,38,39 znak w str_from_file: %c%c%c%c\n\n", string_from_file[40], string_from_file[41]);
+		//printf("\nstring from file:\n|%s|\n", string_from_file);
+		//printf("\ni = %d \n", len);
+		fclose(fp);
+   	
+		do{
+      
+      			token = (number)? strtok(NULL, e) : (start?strtok(string_from_file, s): strtok(NULL, s));	
+			start=0;
 
-		while (fgets(conf, 5, confFile))
-		{
-			if(strcmp(conf, "ROOT") == 0)
-			{
-				while( (ROOT[i++] = fgetc(confFile)) != '\n');
-					ROOT[--i] = '\0';
-			}
-			
-			i = 0;
+			if(!token) break;
+			      //printf( " Token: %s\t , number=%d \n", token, number);
+   
+   
+		        if(number && (i == 0))
+     			{
+	      			sprintf(configuration.root, token);
+				i++;
+				//printf("\nconfiguration.root = |%s|\n", configuration.root);
+      			}
+      			else if (number && (i == 1))
+      			{
+      				sprintf(configuration.port.name, token);
+				i++;
+				//printf("\nconfiguration.port.name = |%s|\n", configuration.port.name);
+   			}
+  	       		 else if (number && (i == 2))
+    			{
+      				sprintf(configuration.setDaemon.str,token);
+				configuration.setDaemon.val = (atoi(&configuration.setDaemon.str[0])) ? 0 : 1;
+				i++;
+				//printf("\nconfiguration.setDaemon.val = |%d|\n", configuration.setDaemon.val);
 
-			if(strcmp(conf, "PORT") == 0)
-			{
-				while( isalnum(PORT[i++] = fgetc(confFile)));
-				PORT[--i] = '\0';
-				iport = atoi(PORT);
-								     
-			}
-			
-			if(strcmp(conf, "CONS") == 0)
-			{
-				setDaemon = ( fgetc(confFile) == '1' ? 0 : 1 );
-			}
-		}
-		fclose(confFile);
+      			}
+	
+	      		number?number=0:++number;
+   
+   		} while ( token != NULL ); 
+
+   		return(0);
 
 	}
 
@@ -374,13 +445,13 @@
 		FILE 	*logFile;
 		char 	tmp[30] = {0};
 			
-		if(!fopen(LOGFILE, "r"))
+		if(!fopen(configuration.logfile, "r"))
 		{
-			logFile = fopen(LOGFILE, "w");
+			logFile = fopen(configuration.logfile, "w");
 		}
 		else
 		{
-			logFile = fopen(LOGFILE, "a");
+			logFile = fopen(configuration.logfile, "a");
 		}
 		
 		getCurrTime();
@@ -418,8 +489,8 @@
 		if(reqinfo.status == 200)
 		{	
 
-			strcat(ROOT, reqinfo.resource);
-			resource = open(ROOT, O_RDONLY);	
+			strcat(configuration.root, reqinfo.resource);
+			resource = open(configuration.root, O_RDONLY);	
 			sprintf(buf, "HTTP/1.0 200 OK.\n\n");
 			WriteLine(n, buf, strlen(buf));
 			
@@ -451,12 +522,13 @@
 
 	void createDaemon()
 	{
-		FILE *daemonfile;
+		FILE*	daemonfile;
 		int 	i;
 		pid_t	pid, sid;
-		char daemonpid[10] = {0};
+		char	daemonpid[10] = {0};
+		int	pidd	      = 0;	
 		pid = fork();
-		int pidd = 0;	
+
 		if (pid < 0)
 			exit(EXIT_FAILURE);
 		
@@ -483,6 +555,7 @@
 		{
 			exit(EXIT_SUCCESS);
 		}
+		
 		if (sid < 0)
 		{
 			perror("Error creating Daemon");
@@ -500,6 +573,7 @@
 		close(STDERR_FILENO);
 		
 		openlog("my-server", 0, LOG_USER);
+		
 		sysLogOpened = 1;
 	}
 
@@ -507,11 +581,11 @@
 	{
 		static char	pathToLockFile[100] = {0};
 		
-		strcpy(pathToLockFile, ROOT);
-		strcat(pathToLockFile, LOCKFILE);
-		LOCKFILE = strdup(pathToLockFile);
+		strcpy(pathToLockFile, configuration.root);
+		strcat(pathToLockFile, configuration.lockfile);
+		strcpy(configuration.lockfile, pathToLockFile);
 		
-		if( (lockfd = open(LOCKFILE, O_RDWR|O_CREAT|O_EXCL) < 0) )
+		if( (lockfd = open(pathToLockFile, O_RDWR|O_CREAT|O_EXCL) < 0) )
 		{
 			perror("Error open lockfile! ");
 		}
@@ -651,6 +725,7 @@
 	{
 		char 	c;
 		int  	i;
+		
 		while ((i = read(getRes, &c, 1)))
 		{
 			if ( i < 0 )
@@ -658,6 +733,7 @@
 				die("Error reading from file (resource)", LOG_USER);
 				return 1;
 			}
+		
 			if (write(n, &c, 1) < 1 )
 			{
 				die("Error sending file (resource)", LOG_USER);
@@ -763,7 +839,7 @@
 	{
 		printf(
 			"--------------------------------------------Simple Http Server------------------------------------------------\n\n"\
-			"\n\nThis is a simple http server, which supports only GET command. Every others commands\n"\
+			"\n\nThis is a simple http server, which supports only GET command. Every other command\n"\
 			"will be consider as UNSUPPORTED and will produce 501 error, which was objective as\n"\
 			"a foundation of this program. Features:\n\n"\
 			"- Running as a daemon\n- You can set chroot\n- Logs about connection are putting to logfile\n- Default settings loads from 'httpconf' file\n\n"\
