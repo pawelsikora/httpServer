@@ -17,6 +17,8 @@
 	#include <sys/file.h>
 	#include <signal.h>
 	#include <getopt.h>
+	#include <glib.h>
+	#include <stdbool.h>
 	
 	#define MAX_REQ_LINE 1024
 	#define DEFAULT_PORT 8080
@@ -28,21 +30,36 @@
 	#define MAX_SIZE_OF_PATH 500
 	#define MAX_SIZE_OF_FILE_NAME 40
 	#define SIZE_OF_ARRAY_ONE_EL 2
+	#define MAX_SIZE_OF_CONF_FILE 200
+	#define HASH_KEY_ROOT 1
+	#define HASH_KEY_PORT 2
+	#define HASH_KEY_COM  3	
 	
+	//Hash table:
+
+
+	struct entry_s
+	{
+		char *key;
+		char *value;
+		struct entry_s *next;
+	};
 	
+	typedef struct entry_s entry_t;
+
 	struct server_config 
 	{
 		char root[MAX_SIZE_OF_PATH];
 		char logfile[MAX_SIZE_OF_FILE_NAME];
 		char lockfile[MAX_SIZE_OF_FILE_NAME];
 
-		union port_conf
+		struct port_conf
 		{
 			int  	 val;
 			char 	 name[MAX_SIZE_OF_PORT];
 		} port;
 
-		union daemon_var {
+		struct daemon_var {
 			char	 str[SIZE_OF_ARRAY_ONE_EL];
 			int	 val;
 		} setDaemon;
@@ -377,67 +394,73 @@
 
 	int configFile(){
 		
-		const	 char	 s[SIZE_OF_ARRAY_ONE_EL] = "=";
-   		const	 char	 e[SIZE_OF_ARRAY_ONE_EL] = "\n";
-   		auto 	 char*	 token;
-   		auto 	 int 	 number	 = 0;
-   		auto 	 int 	 start   = 1;
-		auto	 FILE*	 fp;
-		auto   	 char*	 string_from_file;
-		auto	 int 	 len  = 0;
-		auto	 char	 tmp[500];
-		auto	 int 	 i    = 0;
-	
-	
+		FILE * fp;
+		const char s[SIZE_OF_ARRAY_ONE_EL] = "=";
+		const char e[SIZE_OF_ARRAY_ONE_EL] = "\n";
+		char *token;
+		char *string_from_file;
+		char tmp[MAX_SIZE_OF_CONF_FILE];
+		int len = 0;
+		bool bIfSecond = 0;
+		bool start = 1;
+		int *ptrFromHashTableLookup;
+		gint HASH_ROOT;
+		gint HASH_PORT;
+		gint HASH_COM;
+		
+
+		GHashTable* hash = g_hash_table_new(g_str_hash, g_int_equal);
+		HASH_ROOT = 1;
+		HASH_PORT = 2;
+		HASH_COM  = 3;
+		g_hash_table_insert(hash, "ROOT", &HASH_ROOT);
+		g_hash_table_insert(hash, "PORT", &HASH_PORT);
+		g_hash_table_insert(hash, "CONS" , &HASH_COM );
+
 		fp = fopen("http.conf", "r");
-	
 		while((tmp[len] = fgetc(fp)) != EOF)
 			len++;
-	
+		
 		string_from_file = (char*)calloc(len+3, sizeof(tmp[0]));
-		string_from_file[38] = 'e';
 		memcpy(string_from_file, tmp, len);
-		//printf("\n\t\tTo 36,37,38,39 znak w str_from_file: %c%c%c%c\n\n", string_from_file[40], string_from_file[41]);
-		//printf("\nstring from file:\n|%s|\n", string_from_file);
-		//printf("\ni = %d \n", len);
+		
 		fclose(fp);
-   	
+		
 		do{
-      
-      			token = (number)? strtok(NULL, e) : (start?strtok(string_from_file, s): strtok(NULL, s));	
-			start=0;
+		  
+			if((token = (bIfSecond) ? strtok(NULL, e) : ( start ? strtok(string_from_file, s) : strtok(NULL, s))) == NULL)
+				break;	
+			
+			if(!bIfSecond)
+				if((ptrFromHashTableLookup = g_hash_table_lookup(hash, token)) == NULL)
+				{
+					printf("ptrFromHashTableLookup is NULL\n");
+					exit(1);
+				}
 
-			if(!token) break;
-			      //printf( " Token: %s\t , number=%d \n", token, number);
-   
-   
-		        if(number && (i == 0))
-     			{
-	      			sprintf(configuration.root, token);
-				i++;
-				//printf("\nconfiguration.root = |%s|\n", configuration.root);
-      			}
-      			else if (number && (i == 1))
-      			{
-      				sprintf(configuration.port.name, token);
-				i++;
-				//printf("\nconfiguration.port.name = |%s|\n", configuration.port.name);
-   			}
-  	       		 else if (number && (i == 2))
-    			{
-      				sprintf(configuration.setDaemon.str,token);
-				configuration.setDaemon.val = (atoi(&configuration.setDaemon.str[0])) ? 0 : 1;
-				i++;
-				//printf("\nconfiguration.setDaemon.val = |%d|\n", configuration.setDaemon.val);
+			start=0;	
+			  
+			   if(((*ptrFromHashTableLookup == HASH_KEY_ROOT) && bIfSecond))
+				{
+					memcpy(configuration.root, token, strlen(token));
 
-      			}
-	
-	      		number?number=0:++number;
-   
-   		} while ( token != NULL ); 
+				}
+				else if ((*ptrFromHashTableLookup == HASH_KEY_PORT) && bIfSecond)
+				{
+					memcpy(configuration.port.name, token, strlen(token));
+				}
+				else if ((*ptrFromHashTableLookup == HASH_KEY_COM) && bIfSecond)
+				{
+				configuration.setDaemon.str[0] = token[0];
+				configuration.setDaemon.str[1] = 0;
+				configuration.setDaemon.val = ( atoi(&configuration.setDaemon.str[0]) ? 0 : 1 );
 
-   		return(0);
+				}
+				
+				bIfSecond = !bIfSecond;
+	   } while ( token != NULL ); 
 
+	   return(0);
 	}
 
 	void Log (char* logMessage)
@@ -852,3 +875,4 @@
 			"--chroot	or	-c	1 if you want chroot, otherwise 0.\n"\
 			"--logfile	or	-l	After this parameter you should write name of the logfile you will create.\n\n", programName);
 	}
+
