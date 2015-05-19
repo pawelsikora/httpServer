@@ -1,106 +1,7 @@
-	#include <stdlib.h>
-	#include <stdio.h>
-	#include <sys/types.h>
-	#include <sys/time.h>
-	#include <unistd.h>
-	#include <sys/socket.h>
-	#include <netdb.h>
-	#include <sys/stat.h>
-	#include <fcntl.h>
-	#include <errno.h>
-	#include <syslog.h>
-	#include <string.h>
-	#include <sys/select.h>
-	#include <sys/wait.h>
-	#include <arpa/inet.h>
-	#include <time.h>
-	#include <sys/file.h>
-	#include <signal.h>
-	#include <getopt.h>
-	#include <glib.h>
-	#include <stdbool.h>
-	
-	#define MAX_REQ_LINE 1024
-	#define DEFAULT_PORT 8080
-	#define DEFAULT_PORT_STR "8080"
-	#define DEFAULT_PATH "/home/psikora/"
-	#define LOGFILE_NAME "http.log"
-	#define LOCKFILE_NAME "daemon.lock"
-	#define MAX_SIZE_OF_PORT 7 
-	#define MAX_SIZE_OF_PATH 500
-	#define MAX_SIZE_OF_FILE_NAME 40
-	#define SIZE_OF_ARRAY_ONE_EL 2
-	#define MAX_SIZE_OF_CONF_FILE 200
-	#define HASH_KEY_ROOT 1
-	#define HASH_KEY_PORT 2
-	#define HASH_KEY_COM  3	
-	
-	//Hash table:
-
-
-	struct entry_s
-	{
-		char *key;
-		char *value;
-		struct entry_s *next;
-	};
-	
-	typedef struct entry_s entry_t;
-
-	struct server_config 
-	{
-		char root[MAX_SIZE_OF_PATH];
-		char logfile[MAX_SIZE_OF_FILE_NAME];
-		char lockfile[MAX_SIZE_OF_FILE_NAME];
-
-		struct port_conf
-		{
-			int  	 val;
-			char 	 name[MAX_SIZE_OF_PORT];
-		} port;
-
-		struct daemon_var {
-			char	 str[SIZE_OF_ARRAY_ONE_EL];
-			int	 val;
-		} setDaemon;
-
-	} configuration;
-
-	int bCheckPath;
-
-	char	lmessage[300] = {0};
-	int 	setDaemon = 0;
-	int 	setChroot = 0;
-	int 	sysLogOpened = 0;
-
-	// socket
-	int	listenfd;
-
-	//Request info
-	char	buf[100] = {0};
-	enum 	reqMethod { GET, NOTIMPLEMENTED };
-	int 	lockfd;
-	
-	const struct option long_options[] = {
-	{ "help"	, 0, NULL, 'h' },
-	{ "rootdir"	, 1, NULL, 'r' },
-	{ "port"	, 1, NULL, 'p' },
-	{ "daemon"	, 1, NULL, 'd' },
-	{ "chroot"	, 1, NULL, 'c' },
-	{  NULL		, 0, NULL,  0  }
-	};
-
-	struct  reqInfo 
-	{
-		 enum reqMethod method;
-		 char *resource;
-		 int status;
-	};
-	
-	//time
-	time_t	currentTime;
-	char   	*stringWithTime;
-
+	#include "view.h"
+	#include "model.h"
+	#include "hash_tables.h"	
+	#include "controller.h"	
 	
 	int 		SetChroot		(void);
 	int		initializeServer	(char *port);
@@ -125,34 +26,7 @@
 						 const struct addrinfo *hints,
 						 struct addrinfo **res);
 	
-	int 		checkPath		(char *checkingPath);
-	int 		print_info		(char * programName);
 	
-	void 		my_handler		(int signum)
-	{
-		if( (flock(lockfd, LOCK_UN)) < 0 )
-		{
-			die("Error unlocking LOCKFILE\n", LOG_USER);
-		}
-		else
-		{
-			die("LOCKFILE unlocked successfully\n", LOG_USER);
-		}
-		
-		if (remove(configuration.lockfile) < 0 )
-		{
-			die("Error removing LOCKFILE\n", LOG_USER);
-		}
-		else
-		{
-			die("LOCKFILE removed!\n", LOG_USER);
-		}
-		
-		
-		closelog();
-		
-		exit(1);
-	}
 	
 
 
@@ -273,16 +147,6 @@
 	}
 
 
-	int initialize_configuration( void )
-	{
-		 
-		configuration.port.val = DEFAULT_PORT;
-		strcpy(configuration.port.name, DEFAULT_PORT_STR);
-		strcpy(configuration.root, DEFAULT_PATH);
-		strcpy(configuration.logfile,LOGFILE_NAME);
-		strcpy(configuration.lockfile,LOCKFILE_NAME);
-
-	}
 
 	int initializeServer(char *port)
 	{
@@ -366,31 +230,6 @@
 
 	}
 	
-	int checkPath(char *checkingPath)
-	{
-		
-		while(checkingPath)
-		{	
-			if(*checkingPath++ == '\0')
-			{
-				checkingPath -= 2;
-				if(*checkingPath == '/')
-				{
-					return 0;
-				}
-				else
-				{
-					*(++checkingPath) = '/';
-					*(++checkingPath) = '\0';
-					return -1;
-				}
-			}
-			
-		
-		}
-		return 0;
-	
-	}
 
 	int configFile(){
 		
@@ -709,6 +548,16 @@
 				reqinfo->method = GET;
 				buffer += 5;
 			}
+			else if( !strncmp(buffer, "SEND ", 5) )
+			{
+				reqinfo->method = SEND;
+				buffer += 6;
+			}
+			else if( !strncmp(buffer, "CHAT ", 6) )
+			{
+				reqinfo->method = CHAT;
+				buffer += 6;
+			}
 			else
 			{
 				reqinfo->method = NOTIMPLEMENTED;
@@ -858,21 +707,4 @@
 			
 	}
 
-	int print_info(char * programName)
-	{
-		printf(
-			"--------------------------------------------Simple Http Server------------------------------------------------\n\n"\
-			"\n\nThis is a simple http server, which supports only GET command. Every other command\n"\
-			"will be consider as UNSUPPORTED and will produce 501 error, which was objective as\n"\
-			"a foundation of this program. Features:\n\n"\
-			"- Running as a daemon\n- You can set chroot\n- Logs about connection are putting to logfile\n- Default settings loads from 'httpconf' file\n\n"\
-
-			"\nType name of program: \"%s\" to command line with these possible parameters:\n\n"\
-			"--rootdir	or	-r	Directory, which will be using as a server directory.\n"\
-			"--port		or	-p	Port on which server will be working.\n"\
-			"--daemon	or	-d	If you want to have your program working as a daemon, give 1 after this parameter.\n"\
-			"				Otherwise 0. ex. ( -d 0 to run your program from terminal)\n"\
-			"--chroot	or	-c	1 if you want chroot, otherwise 0.\n"\
-			"--logfile	or	-l	After this parameter you should write name of the logfile you will create.\n\n", programName);
-	}
 
