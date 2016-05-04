@@ -1,4 +1,5 @@
 #include "defs.h"
+#include <getopt.h>
 
 struct server_config 
 {
@@ -18,3 +19,4 @@ struct server_config
 	} setDaemon;
 
 } configuration;
+

@@ -1,8 +1,5 @@
-#include <stdlib.h>
-#include <stdio.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <sys/stat.h>
@@ -16,6 +13,8 @@
 #include <time.h>
 #include <sys/file.h>
 #include <signal.h>
-#include <getopt.h>
-#include <glib.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <getopt.h>
+#include "configuration.h"
+#include "parse.h"

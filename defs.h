@@ -9,6 +9,3 @@
 #define MAX_SIZE_OF_FILE_NAME 40
 #define SIZE_OF_ARRAY_ONE_EL 2
 #define MAX_SIZE_OF_CONF_FILE 200
-#define HASH_KEY_ROOT 1
-#define HASH_KEY_PORT 2
-#define HASH_KEY_COM  3	

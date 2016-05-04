@@ -1,7 +1,14 @@
 #include "libraries.h"
-#include "defs.h"
+#include "common.h"
 
-
+const struct option long_options[] = {
+{ "help"	, 0, NULL, 'h' },
+{ "rootdir"	, 1, NULL, 'r' },
+{ "port"	, 1, NULL, 'p' },
+{ "daemon"	, 1, NULL, 'd' },
+{ "chroot"	, 1, NULL, 'c' },
+{  NULL		, 0, NULL,  0  }
+};
 struct entry_s
 {
 	char *key;
@@ -11,24 +18,6 @@ struct entry_s
 
 typedef struct entry_s entry_t;
 
-struct server_config 
-{
-	char root[MAX_SIZE_OF_PATH];
-	char logfile[MAX_SIZE_OF_FILE_NAME];
-	char lockfile[MAX_SIZE_OF_FILE_NAME];
-
-	struct port_conf
-	{
-		int  	 val;
-		char 	 name[MAX_SIZE_OF_PORT];
-	} port;
-
-	struct daemon_var {
-		char	 str[SIZE_OF_ARRAY_ONE_EL];
-		int	 val;
-	} setDaemon;
-
-} configuration;
 
 int bCheckPath;
 
@@ -42,24 +31,8 @@ int	listenfd;
 
 //Request info
 char	buf[100] = {0};
-enum 	reqMethod { GET, NOTIMPLEMENTED };
 int 	lockfd;
 
-const struct option long_options[] = {
-{ "help"	, 0, NULL, 'h' },
-{ "rootdir"	, 1, NULL, 'r' },
-{ "port"	, 1, NULL, 'p' },
-{ "daemon"	, 1, NULL, 'd' },
-{ "chroot"	, 1, NULL, 'c' },
-{  NULL		, 0, NULL,  0  }
-};
-
-struct  reqInfo 
-{
-	 enum reqMethod method;
-	 char *resource;
-	 int status;
-};
 
 //time
 time_t	currentTime;
@@ -70,12 +43,11 @@ int 		SetChroot		(void);
 int		initializeServer	(char *port);
 int 		Request			(int n);
 int 		getRequest		(int n, struct reqInfo * reqinfo);
-int	 	configFile		(void);
 void 		Log			(char* message);
 int    		trim      		(char * buffer);
 ssize_t 	ReadLine  		(int sockd, char *vptr, size_t maxlen);
 ssize_t 	WriteLine 		(int sockd, char *vptr, size_t n);
-int 		parseHTTPheader 	(char* buffer, struct reqInfo * reqinfo );
+int 		parse_http_header 	(char* buffer, struct reqInfo * reqinfo );
 int 		returnResource  	(int n, int getRes, struct reqInfo * reqinfo );
 void 		createDaemon		(void);
 void 		isOneInstanceOfDaemon   (char *lockfile);
@@ -89,7 +61,6 @@ int 		getaddrinfo		(const char *node,
 					 const struct addrinfo *hints,
 					 struct addrinfo **res);
 
-int 		checkPath		(char *checkingPath);
 int 		print_info		(char * programName);
 
 void 		my_handler		(int signum)
@@ -127,7 +98,7 @@ int main(int argc, char *argv[])
 	pid_t 	pid;	
 
 	initialize_configuration();
-	configFile();
+	parse_config_file();
 	
 		while ((c = getopt_long(argc,argv, "hp:r:c:l:d:", long_options, NULL)) != -1)
 			switch(c)
@@ -171,7 +142,7 @@ int main(int argc, char *argv[])
 	initializeServer(configuration.port.name);
 	
 	
-	if ((bCheckPath = checkPath(configuration.root)) == -1)
+	if ((bCheckPath = parse_check_path(configuration.root)) == -1)
 	{
 		printf("\nPath was incorrect! Now path looks like this : |%s|\n", configuration.root);
 	}
@@ -330,102 +301,6 @@ int SetChroot()
 
 }
 
-int checkPath(char *checkingPath)
-{
-	
-	while(checkingPath)
-	{	
-		if(*checkingPath++ == '\0')
-		{
-			checkingPath -= 2;
-			if(*checkingPath == '/')
-			{
-				return 0;
-			}
-			else
-			{
-				*(++checkingPath) = '/';
-				*(++checkingPath) = '\0';
-				return -1;
-			}
-		}
-		
-	
-	}
-	return 0;
-
-}
-
-int configFile(){
-	
-	FILE * fp;
-	const char s[SIZE_OF_ARRAY_ONE_EL] = "=";
-	const char e[SIZE_OF_ARRAY_ONE_EL] = "\n";
-	char *token;
-	char *string_from_file;
-	char tmp[MAX_SIZE_OF_CONF_FILE];
-	int len = 0;
-	bool bIfSecond = 0;
-	bool start = 1;
-	int *ptrFromHashTableLookup;
-	gint HASH_ROOT;
-	gint HASH_PORT;
-	gint HASH_COM;
-	
-
-	GHashTable* hash = g_hash_table_new(g_str_hash, g_int_equal);
-	HASH_ROOT = 1;
-	HASH_PORT = 2;
-	HASH_COM  = 3;
-	g_hash_table_insert(hash, "ROOT", &HASH_ROOT);
-	g_hash_table_insert(hash, "PORT", &HASH_PORT);
-	g_hash_table_insert(hash, "CONS" , &HASH_COM );
-
-	fp = fopen("http.conf", "r");
-	while((tmp[len] = fgetc(fp)) != EOF)
-		len++;
-	
-	string_from_file = (char*)calloc(len+3, sizeof(tmp[0]));
-	memcpy(string_from_file, tmp, len);
-	
-	fclose(fp);
-	
-	do{
-	  
-		if((token = (bIfSecond) ? strtok(NULL, e) : ( start ? strtok(string_from_file, s) : strtok(NULL, s))) == NULL)
-			break;	
-		
-		if(!bIfSecond)
-			if((ptrFromHashTableLookup = g_hash_table_lookup(hash, token)) == NULL)
-			{
-				printf("ptrFromHashTableLookup is NULL\n");
-				exit(1);
-			}
-
-		start=0;	
-		  
-		   if(((*ptrFromHashTableLookup == HASH_KEY_ROOT) && bIfSecond))
-			{
-				memcpy(configuration.root, token, strlen(token));
-
-			}
-			else if ((*ptrFromHashTableLookup == HASH_KEY_PORT) && bIfSecond)
-			{
-				memcpy(configuration.port.name, token, strlen(token));
-			}
-			else if ((*ptrFromHashTableLookup == HASH_KEY_COM) && bIfSecond)
-			{
-			configuration.setDaemon.str[0] = token[0];
-			configuration.setDaemon.str[1] = 0;
-			configuration.setDaemon.val = ( atoi(&configuration.setDaemon.str[0]) ? 0 : 1 );
-
-			}
-			
-			bIfSecond = !bIfSecond;
-   } while ( token != NULL ); 
-
-   return(0);
-}
 
 void Log (char* logMessage)
 {
@@ -642,7 +517,7 @@ int getRequest(int n, struct reqInfo * reqinfo)
 		
 		if( buff[0] == '\0' )
 			return 0;
-		if( parseHTTPheader(buff, reqinfo) )
+		if( parse_http_header(buff, reqinfo) )
 			return 0;
 	}
 	
@@ -660,53 +535,6 @@ int trim(char* buffer)
 	return 0;
 }
 
-int parseHTTPheader( char* buffer, struct reqInfo * reqinfo )
-{
-	static int 	first_header = 1;
-	char		*endptr;
-	int 		len;
-
-	if (first_header)
-	{
-		if( !strncmp(buffer, "GET ", 4) )
-		{
-			reqinfo->method = GET;
-			buffer += 5;
-		}
-		else
-		{
-			reqinfo->method = NOTIMPLEMENTED;
-			reqinfo->status = 501;
-			return -1;
-		}
-		
-		//Beggining of the resource
-		while ( *buffer && isspace(*buffer) )
-			buffer++;
-		
-		//Calculate string
-		endptr = strchr(buffer, ' ');
-		if ( endptr == NULL)
-			len = strlen(buffer);
-		else
-			len = endptr - buffer;
-
-		if ( len == 0 ) {
-			reqinfo->status = 400;
-			return -1;
-		}
-
-		//Store in request information structure
-		
-		reqinfo->resource = calloc(len+1, sizeof(char));
-		strncpy(reqinfo->resource, buffer, len);
-
-		first_header = 0;
-		return 0;
-	}
-	
-	return 0;
-}
 
 int returnResource( int n, int getRes, struct reqInfo * reqinfo )
 {
