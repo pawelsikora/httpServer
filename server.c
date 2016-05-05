@@ -1,6 +1,8 @@
 #include "libraries.h"
 #include "common.h"
 
+#define ERR_BAD_FILE_DESC 9
+
 const struct option long_options[] = {
 { "help"	, 0, NULL, 'h' },
 { "rootdir"	, 1, NULL, 'r' },
@@ -95,7 +97,8 @@ int main(int argc, char *argv[])
 {
 	char	c;
 	int	connected;
-	pid_t 	pid;	
+	pid_t 	pid;
+	
 
 	initialize_configuration();
 	parse_config_file();
@@ -350,7 +353,6 @@ int Request(int n)
 	
 	if(reqinfo.status == 200)
 	{	
-
 		strcat(configuration.root, reqinfo.resource);
 		resource = open(configuration.root, O_RDONLY);	
 		sprintf(buf, "HTTP/1.0 200 OK.\n\n");
@@ -358,7 +360,11 @@ int Request(int n)
 		
 		if( returnResource(n, resource, &reqinfo) )
 		{
-			die("Error Return_Resource()", LOG_USER);
+			printf("Error returnResource(), error code: %d\n",errno);
+			
+			if (errno == ERR_BAD_FILE_DESC)	
+				printf("Please check if the following path with requested file is valid: %s\n", configuration.root);
+			
 			exit(EXIT_FAILURE);
 		}
 
