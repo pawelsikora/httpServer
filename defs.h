@@ -1,7 +1,7 @@
 #define MAX_REQ_LINE 1024
 #define DEFAULT_PORT 8080
 #define DEFAULT_PORT_STR "8080"
-#define DEFAULT_PATH "/home/psikora/"
+#define DEFAULT_PATH "~/"
 #define LOGFILE_NAME "http.log"
 #define LOCKFILE_NAME "daemon.lock"
 #define MAX_SIZE_OF_PORT 7 
