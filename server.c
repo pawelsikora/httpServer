@@ -36,16 +36,11 @@ char	buf[100] = {0};
 int 	lockfd;
 
 
-//time
-time_t	currentTime;
-char   	*stringWithTime;
-
 
 int 		SetChroot		(void);
 int		initializeServer	(char *port);
 int 		Request			(int n);
 int 		getRequest		(int n, struct reqInfo * reqinfo);
-void 		Log			(char* message);
 int    		trim      		(char * buffer);
 ssize_t 	ReadLine  		(int sockd, char *vptr, size_t maxlen);
 ssize_t 	WriteLine 		(int sockd, char *vptr, size_t n);
@@ -56,7 +51,6 @@ void 		isOneInstanceOfDaemon   (char *lockfile);
 void 		initReqInfo		(struct reqInfo * reqinfo);
 void 		freeReqInfo		(struct reqInfo * reqinfo);
 int 		Error_Message		(int n, struct reqInfo * reqinfo);
-void		getCurrTime		(void);
 void 		die			(const char*, int);
 int 		getaddrinfo		(const char *node,
 					 const char *service,
@@ -304,28 +298,6 @@ int SetChroot()
 
 }
 
-
-void Log (char* logMessage)
-{
-	FILE 	*logFile;
-	char 	tmp[30] = {0};
-		
-	if(!fopen(configuration.logfile, "r"))
-	{
-		logFile = fopen(configuration.logfile, "w");
-	}
-	else
-	{
-		logFile = fopen(configuration.logfile, "a");
-	}
-	
-	getCurrTime();
-	sprintf(tmp, "Time: %s", stringWithTime);
-	fputs(logMessage, logFile);
-	fputs(tmp, logFile);
-	fclose(logFile);	
-
-}
 
 void freeReqInfo(struct reqInfo * reqinfo)
 {
@@ -633,11 +605,6 @@ ssize_t ReadLine ( int sockd, char *vptr, size_t maxlen)
 }
 
 
-void getCurrTime()
-{
-	currentTime = time(NULL);
-	stringWithTime = ctime(&currentTime);
-}
 
 void die(const char *message, int logPriority)
 {
