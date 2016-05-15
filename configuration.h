@@ -1,6 +1,9 @@
 #include "defs.h"
 #include <getopt.h>
 
+int initialize_configuration	( void );
+int initializeServer		(char *port);
+
 struct server_config 
 {
 	char root[MAX_SIZE_OF_PATH];

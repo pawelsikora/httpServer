@@ -1,6 +1,7 @@
 #include "common.h"
 #include "parse.h"
 #include "configuration.h"
+#include "logging.h"
 
 int parse_config_file(){
 	
@@ -144,5 +145,72 @@ int parse_check_path(char *checkingPath)
 	
 	}
 	return 0;
+
+}
+
+ssize_t ReadLine ( int sockd, char *vptr, size_t maxlen)
+{
+	ssize_t		n, rc;
+	char		c, *buffer;
+
+	buffer = vptr;
+
+	for ( n = 1; n < maxlen; n++) {
+		
+		if( (rc = read(sockd, &c, 1)) == 1 ) 
+		{
+			*buffer++ = c;
+			
+			if ( c == '\n' )
+				break;
+		
+		}
+		else if ( rc == 0 ) 
+		{
+			
+			if ( n == 1 )
+				return 0;
+			else 
+				break;
+		}
+		else
+		{
+			if ( errno == EINTR )
+				continue;
+			
+			die("Error in readLine()", LOG_USER);
+		}
+	}
+
+	*buffer = 0;
+	return n;
+}
+
+ssize_t WriteLine( int sockd, char *vptr, size_t n)
+{
+	ssize_t		nleft;
+	ssize_t		nwritten;
+	char		*buffer;
+
+	buffer = vptr;
+	nleft = n;
+
+	while ( nleft > 0 ) {
+		if ( (nwritten = write(sockd, buffer, nleft)) <= 0 )
+		{
+			if ( errno == EINTR )
+			{
+				nwritten = 0;
+			}
+			else
+			{
+				die("Error in writeLine()", LOG_USER);
+			}
+		}
+		nleft -= nwritten;
+		buffer += nwritten;
+	}
+
+	return n;
 
 }

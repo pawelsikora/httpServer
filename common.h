@@ -1,5 +1,4 @@
 #include "defs.h"
-#include "logging.h"
 
 enum 	reqMethod { GET, NOTIMPLEMENTED };
 

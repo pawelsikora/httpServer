@@ -1,5 +1,6 @@
 #include "libraries.h"
 #include "common.h"
+#include "logging.h"
 
 #define ERR_BAD_FILE_DESC 9
 
@@ -20,13 +21,10 @@ struct entry_s
 
 typedef struct entry_s entry_t;
 
-
 int bCheckPath;
 
-char	lmessage[300] = {0};
 int 	setDaemon = 0;
 int 	setChroot = 0;
-int 	sysLogOpened = 0;
 
 // socket
 int	listenfd;
@@ -35,15 +33,13 @@ int	listenfd;
 char	buf[100] = {0};
 int 	lockfd;
 
-
+extern char lmessage[];
+extern int 	sysLogOpened;
 
 int 		SetChroot		(void);
-int		initializeServer	(char *port);
 int 		Request			(int n);
 int 		getRequest		(int n, struct reqInfo * reqinfo);
 int    		trim      		(char * buffer);
-ssize_t 	ReadLine  		(int sockd, char *vptr, size_t maxlen);
-ssize_t 	WriteLine 		(int sockd, char *vptr, size_t n);
 int 		parse_http_header 	(char* buffer, struct reqInfo * reqinfo );
 int 		returnResource  	(int n, int getRes, struct reqInfo * reqinfo );
 void 		createDaemon		(void);
@@ -51,7 +47,6 @@ void 		isOneInstanceOfDaemon   (char *lockfile);
 void 		initReqInfo		(struct reqInfo * reqinfo);
 void 		freeReqInfo		(struct reqInfo * reqinfo);
 int 		Error_Message		(int n, struct reqInfo * reqinfo);
-void 		die			(const char*, int);
 int 		getaddrinfo		(const char *node,
 					 const char *service,
 					 const struct addrinfo *hints,
@@ -537,89 +532,6 @@ int returnResource( int n, int getRes, struct reqInfo * reqinfo )
 
 }
 
-ssize_t WriteLine( int sockd, char *vptr, size_t n)
-{
-	ssize_t		nleft;
-	ssize_t		nwritten;
-	char		*buffer;
-
-	buffer = vptr;
-	nleft = n;
-
-	while ( nleft > 0 ) {
-		if ( (nwritten = write(sockd, buffer, nleft)) <= 0 )
-		{
-			if ( errno == EINTR )
-			{
-				nwritten = 0;
-			}
-			else
-			{
-				die("Error in writeLine()", LOG_USER);
-			}
-		}
-		nleft -= nwritten;
-		buffer += nwritten;
-	}
-
-	return n;
-
-}
-
-ssize_t ReadLine ( int sockd, char *vptr, size_t maxlen)
-{
-	ssize_t		n, rc;
-	char		c, *buffer;
-
-	buffer = vptr;
-
-	for ( n = 1; n < maxlen; n++) {
-		
-		if( (rc = read(sockd, &c, 1)) == 1 ) 
-		{
-			*buffer++ = c;
-			
-			if ( c == '\n' )
-				break;
-		
-		}
-		else if ( rc == 0 ) 
-		{
-			
-			if ( n == 1 )
-				return 0;
-			else 
-				break;
-		}
-		else
-		{
-			if ( errno == EINTR )
-				continue;
-			
-			die("Error in readLine()", LOG_USER);
-		}
-	}
-
-	*buffer = 0;
-	return n;
-}
-
-
-
-void die(const char *message, int logPriority)
-{
-	if (sysLogOpened){
-		syslog(logPriority, message);
-	}
-	else if(errno && !sysLogOpened){	
-		perror(message);
-	}
-	else
-	{
-		printf("ERROR: %s\n", message);
-	}
-		
-}
 
 int print_info(char * programName)
 {
